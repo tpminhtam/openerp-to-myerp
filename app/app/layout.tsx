@@ -4,6 +4,7 @@ import { cookies } from "next/headers";
 import "./globals.css";
 import { Nav } from "@/components/Nav";
 import { PersonaSwitcher } from "@/components/PersonaSwitcher";
+import { VoiceDock } from "@/components/VoiceDock";
 import { findPrincipal, PRINCIPALS } from "@/lib/sod";
 
 export const metadata: Metadata = {
@@ -35,6 +36,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
             {children}
           </main>
         </div>
+        <VoiceDock />
       </body>
     </html>
   );
