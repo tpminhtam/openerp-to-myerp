@@ -45,3 +45,5 @@ next-env.d.ts
 # provider agent skills installed by the Vercel CLI
 .agents
 skills-lock.json
+.claude/skills/neon
+.claude/skills/neon-postgres
