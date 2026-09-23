@@ -1,0 +1,203 @@
+// myERP — modernized from OpenERP 7.0 accounting. Money is integer minor units (EUR cents); rates are decimal strings.
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Principal {
+  id          String   @id
+  kind        String   // human | agent | system
+  displayName String
+  title       String
+  roles       String[]
+  color       String   @default("#475569")
+}
+
+model Company {
+  id       String @id
+  name     String
+  currency String
+}
+
+model Account {
+  code       String  @id
+  name       String
+  type       String  // view | other | receivable | payable | liquidity
+  userType   String
+  parentCode String?
+  reconcile  Boolean @default(false)
+  xmlId      String?
+}
+
+model Journal {
+  code String @id
+  name String
+  type String
+}
+
+model Invoice {
+  number       String       @id
+  kind         String       // customer | supplier
+  companyId    String
+  partner      String
+  date         DateTime     @db.Date
+  state        String       // draft | open | paid
+  currency     String
+  journalCode  String
+  untaxedMinor Int
+  taxMinor     Int
+  totalMinor   Int
+  configCommit String
+  entryNumber  String?
+  lines        InvoiceLine[]
+  taxLines     InvoiceTax[]
+}
+
+model InvoiceLine {
+  id             Int     @id @default(autoincrement())
+  invoiceNumber  String
+  lineNo         Int
+  description    String
+  accountCode    String
+  quantity       String  // decimal string, as the legacy stored a float
+  priceUnitMinor Int
+  taxCodes       String[]
+  subtotalMinor  Int
+  invoice        Invoice @relation(fields: [invoiceNumber], references: [number])
+
+  @@index([invoiceNumber])
+}
+
+model InvoiceTax {
+  id            Int     @id @default(autoincrement())
+  invoiceNumber String
+  lineNo        Int
+  taxCode       String
+  taxName       String
+  baseMinor     Int
+  amountMinor   Int
+  accountCode   String?
+  invoice       Invoice @relation(fields: [invoiceNumber], references: [number])
+
+  @@index([invoiceNumber])
+  @@index([taxCode])
+}
+
+model JournalEntry {
+  number      String        @id
+  journalCode String
+  date        DateTime      @db.Date
+  ref         String?
+  state       String        @default("posted")
+  lines       JournalLine[]
+}
+
+model JournalLine {
+  id            Int          @id @default(autoincrement())
+  entryNumber   String
+  lineNo        Int
+  accountCode   String
+  name          String
+  debitMinor    Int          @default(0)
+  creditMinor   Int          @default(0)
+  partner       String?
+  taxCode       String?
+  invoiceNumber String?
+  entry         JournalEntry @relation(fields: [entryNumber], references: [number])
+
+  @@index([accountCode])
+  @@index([entryNumber])
+}
+
+// ---- version control for configuration (Git's object model over the tax table)
+model ConfigCommit {
+  hash        String   @id
+  parents     String[]
+  tree        Json
+  authorId    String
+  message     String
+  committedAt DateTime @default(now())
+}
+
+model Ref {
+  name       String  @id
+  kind       String  // branch | tag
+  commitHash String
+  protected  Boolean @default(false)
+  createdBy  String
+}
+
+model RefLog {
+  id       Int      @id @default(autoincrement())
+  refName  String
+  fromHash String?
+  toHash   String
+  actorId  String
+  reason   String
+  at       DateTime @default(now())
+}
+
+model ChangeRequest {
+  number        String    @id
+  title         String
+  body          String?
+  sourceRef     String
+  targetRef     String    @default("main")
+  headHash      String
+  baseHash      String
+  mergeBaseHash String
+  effectiveFrom DateTime? @db.Date
+  status        String    @default("open") // open | merged | closed
+  openedBy      String
+  openedAt      DateTime  @default(now())
+  mergedBy      String?
+  mergedAt      DateTime?
+  closedAt      DateTime?
+  checks        Check[]
+  reviews       Review[]
+}
+
+model Check {
+  id            Int           @id @default(autoincrement())
+  requestNumber String
+  headHash      String
+  name          String
+  conclusion    String // success | failure
+  summary       String
+  detail        Json
+  ranAt         DateTime      @default(now())
+  request       ChangeRequest @relation(fields: [requestNumber], references: [number])
+
+  @@index([requestNumber, headHash])
+}
+
+model Review {
+  id            Int           @id @default(autoincrement())
+  requestNumber String
+  headHash      String
+  state         String // approved | changes_requested | blocked
+  actorId       String
+  ruleId        String?
+  note          String?
+  at            DateTime      @default(now())
+  request       ChangeRequest @relation(fields: [requestNumber], references: [number])
+
+  @@index([requestNumber])
+}
+
+model AuditLog {
+  id         Int      @id @default(autoincrement())
+  at         DateTime @default(now())
+  actorId    String
+  action     String
+  objectType String
+  objectId   String
+  summary    String
+  payload    Json
+  prevHash   String
+  hash       String
+}
