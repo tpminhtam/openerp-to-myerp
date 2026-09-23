@@ -45,22 +45,33 @@ async function ask(system: string, user: string, maxTokens = 1500): Promise<stri
   return res.content.filter((b) => b.type === "text").map((b) => (b as { text: string }).text).join("\n");
 }
 
-export interface ProposalOut { number: string; title: string; edits: { path: string; value: unknown }[]; rationale: string; branch: string }
+export interface ProposalOut { number: string; title: string; edits: { path: string; value: unknown }[]; rationale: string; assumptions: string; branch: string }
 
 /** "Raise Sale VAT to 16% from 1 October 2026" → validated edits → branch + commit + change request opened as Claude. */
 export async function proposeFromText(text: string): Promise<ProposalOut> {
   const claude = findPrincipal("claude")!;
   const tree = await treeAt(await head("main"));
-  const system = `You turn a finance user's plain-English request into a structured tax configuration change for myERP.
+  const today = new Date().toISOString().slice(0, 10);
+  const system = `You turn a finance user's plain-English request into a structured tax configuration change for myERP. Today is ${today}.
 The configuration in force (tax codes and fields):
 ${describeTaxes(tree)}
 
-Rules: only these fields may change: amount (decimal string; percent taxes use 0-1, so 16% is "0.16"), name (string), active (boolean), sequence (integer), priceInclude (boolean), includeBaseAmount (boolean). Paths look like "taxes.S15.amount". Never invent tax codes. If the request is ambiguous or asks for something outside these fields, return {"error": "<one sentence>"}.
+Fields that may change: amount (decimal string; percent taxes use 0-1, so 16% is "0.16"), name (string), active (boolean), sequence (integer), priceInclude (boolean), includeBaseAmount (boolean). Paths look like "taxes.S15.amount". Never invent tax codes.
+
+Resolve ordinary ambiguity yourself, the way an experienced tax analyst would, and state what you assumed in "assumptions". Do not refuse because a detail is unstated:
+- "Sale VAT", "standard VAT" or "VAT" with a rate change means the standard sale rate: S15 and its price-included twin S15I, which must always carry the same rate. It does not include the reduced rate S6, the exempt S0 or purchase taxes unless the user names them ("reduced", "purchase", "input").
+- "Purchase VAT" means P15 (and P6 only if "reduced" is said).
+- A date without a year is the next occurrence on or after today.
+- When an amount changes and a tax's name contains the old percentage, update the name to the new percentage too.
+Return {"error": "<one short question>"} only when the request cannot be expressed with these fields or would need a tax code that does not exist.
+
+Example: "Raise Sale VAT to 16% from October first" -> edits S15.amount "0.16", S15.name "Sale VAT 16%", S15I.amount "0.16", S15I.name "Sale VAT 16% (price included)"; effectiveFrom = the next 1 October; assumptions: "Sale VAT means the standard rate S15 and its price-included twin S15I; the reduced rate S6 is unchanged."
+
 Respond with JSON only, no prose, in this shape:
-{"title": "<short title>", "branch": "claude/<slug>", "edits": [{"path": "taxes.<code>.<field>", "value": <json value>}], "effectiveFrom": "<YYYY-MM-DD or null>", "rationale": "<one or two sentences>"}`;
+{"title": "<short title>", "branch": "claude/<slug>", "edits": [{"path": "taxes.<code>.<field>", "value": <json value>}], "effectiveFrom": "<YYYY-MM-DD or null>", "assumptions": "<one sentence, or empty>", "rationale": "<one sentence>"}`;
   const raw = await ask(system, text, 800);
-  const parsed = extractJson(raw) as { error?: string; title?: string; branch?: string; edits?: { path: string; value: unknown }[]; effectiveFrom?: string | null; rationale?: string };
-  if (parsed.error) throw Object.assign(new Error(parsed.error), { status: 400 });
+  const parsed = extractJson(raw) as { error?: string; title?: string; branch?: string; edits?: { path: string; value: unknown }[]; effectiveFrom?: string | null; rationale?: string; assumptions?: string };
+  if (parsed.error) throw Object.assign(new Error(parsed.error), { status: 422, question: true });
   if (!parsed.edits?.length || !parsed.title) throw new Error("The model returned no edits");
   // Deterministic validation: every path must exist and the values must be well-formed before anything is written.
   let check = tree;
@@ -69,12 +80,12 @@ Respond with JSON only, no prose, in this shape:
   const cr = await proposeEdit({
     branch: `${branch}-${Date.now().toString(36)}`,
     title: parsed.title,
-    body: `Proposed by Claude from: "${text}"\n\n${parsed.rationale ?? ""}`,
+    body: `Proposed by Claude from: "${text}"\n\n${parsed.rationale ?? ""}${parsed.assumptions ? `\n\nAssumed: ${parsed.assumptions}` : ""}`,
     edits: parsed.edits,
     effectiveFrom: parsed.effectiveFrom ?? undefined,
     actor: claude,
   });
-  return { number: cr.number, title: cr.title, edits: parsed.edits, rationale: parsed.rationale ?? "", branch: cr.sourceRef };
+  return { number: cr.number, title: cr.title, edits: parsed.edits, rationale: parsed.rationale ?? "", assumptions: parsed.assumptions ?? "", branch: cr.sourceRef };
 }
 
 export interface ExplainOut { note: string; grounded: boolean; ungrounded: string[]; figuresChecked: number; attempts: number }

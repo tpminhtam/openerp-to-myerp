@@ -73,12 +73,19 @@ export async function handleVoice(text: string, contextNumber?: string): Promise
 
   // 3. Propose a change in plain English, then run the checks so the number spoken is the replay's.
   if (/\b(raise|lower|increase|decrease|reduce|cut|set|change|make|deactivate|disable|enable|rename|propose|bump)\b/.test(t) && /\b(vat|tax|rate|percent|%|s15|s6|p15|p6|exempt)\b/.test(t)) {
-    const p = await proposeFromText(heard);
+    let p;
+    try {
+      p = await proposeFromText(heard);
+    } catch (e) {
+      const err = e as Error & { question?: boolean };
+      if (!err.question) throw e;
+      return done({ action: "propose", reply: `I need one more detail before I open a change request: ${err.message}`, spoken: `I need one more detail. ${err.message}` });
+    }
     const { impact, checks } = await runChecks(p.number, claude());
     const allGreen = checks.every((c) => c.conclusion === "success");
     return done({
       action: "propose", number: p.number, navigate: `/changes/${p.number}`,
-      reply: `Opened ${p.number} as Claude: ${p.title}. Checks ${allGreen ? "passed" : "need attention"}. ${impact?.headline ?? ""} A tax reviewer has to approve it; I cannot.`,
+      reply: `Opened ${p.number} as Claude: ${p.title}.${p.assumptions ? ` Assumed: ${p.assumptions}` : ""} Checks ${allGreen ? "passed" : "need attention"}. ${impact?.headline ?? ""} A tax reviewer has to approve it; I cannot.`,
       spoken: `I opened ${p.number}: ${p.title}. I replayed the books: ${impact?.headline ?? "no impact result"} ${allGreen ? "All three checks passed." : "Some checks failed."} It now needs a tax reviewer. I can't approve it myself.`,
     });
   }
