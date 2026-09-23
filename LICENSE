@@ -1,0 +1,11 @@
+This repository contains two bodies of work.
+
+1. legacy/openerp-7.0/ is a subset (server core and the `account` addon) of OpenERP 7.0,
+   copyright OpenERP S.A., published under the GNU Affero General Public License v3
+   (AGPL-3). See legacy/openerp-7.0/LICENSE. It is included unmodified as the legacy
+   system being modernized.
+
+2. Everything else (the context pack and the modern application under app/) is
+   copyright 2026 Tam Tran and is also published under the GNU Affero General Public
+   License v3, so the whole repository can be used, studied and shared under one licence.
+   The full AGPL-3 text is in legacy/openerp-7.0/LICENSE.
