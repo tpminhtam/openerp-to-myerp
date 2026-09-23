@@ -1,6 +1,6 @@
 import { NextRequest } from "next/server";
 import { handle } from "@/lib/http";
-import { loadReplayInvoices } from "@/lib/changes";
+import { loadReplayInvoices, treesForInvoices } from "@/lib/changes";
 import { replay } from "@/lib/replay";
 import { head, treeAt } from "@/lib/vcs";
 
@@ -9,6 +9,7 @@ export async function GET(req: NextRequest) {
   return handle(async () => {
     const base = req.nextUrl.searchParams.get("base") ?? "main";
     const target = req.nextUrl.searchParams.get("head") ?? base;
-    return replay(await treeAt(await head(base)), await treeAt(await head(target)), await loadReplayInvoices());
+    const invoices = await loadReplayInvoices();
+    return replay(await treeAt(await head(base)), await treeAt(await head(target)), invoices, await treesForInvoices(invoices));
   });
 }

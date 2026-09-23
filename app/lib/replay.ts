@@ -7,6 +7,8 @@ export interface ReplayInvoice {
   number: string; kind: string; partner: string; date: string; state: string; currency: string;
   lines: { lineNo: number; quantity: string; priceUnitMinor: number; taxCodes: string[] }[];
   storedTaxMinor: number;
+  /** the configuration commit the invoice was computed with; parity recomputes under it */
+  configCommit?: string;
 }
 
 export interface InvoiceImpact {
@@ -43,7 +45,7 @@ export function invoiceTax(tree: ConfigTree, inv: ReplayInvoice): { total: bigin
   return { total, byTax };
 }
 
-export function replay(base: ConfigTree, headTree: ConfigTree, invoices: ReplayInvoice[]): ReplayResult {
+export function replay(base: ConfigTree, headTree: ConfigTree, invoices: ReplayInvoice[], treesByCommit: Record<string, ConfigTree> = {}): ReplayResult {
   const started = Date.now();
   const impacts: InvoiceImpact[] = [];
   const errors: { number: string; error: string }[] = [];
@@ -56,7 +58,10 @@ export function replay(base: ConfigTree, headTree: ConfigTree, invoices: ReplayI
     try {
       const b = invoiceTax(base, inv);
       const h = invoiceTax(headTree, inv);
-      if (Number(b.total) !== inv.storedTaxMinor) parity.push({ number: inv.number, stored: inv.storedTaxMinor, recomputed: Number(b.total) });
+      // Parity: the invoice's own configuration must reproduce its stored tax to the cent (main may have moved since).
+      const own = (inv.configCommit && treesByCommit[inv.configCommit]) || base;
+      const recomputed = own === base ? b.total : invoiceTax(own, inv).total;
+      if (Number(recomputed) !== inv.storedTaxMinor) parity.push({ number: inv.number, stored: inv.storedTaxMinor, recomputed: Number(recomputed) });
       for (const [code, amt] of b.byTax) taxBase.set(code, (taxBase.get(code) ?? 0n) + amt);
       for (const [code, amt] of h.byTax) taxHead.set(code, (taxHead.get(code) ?? 0n) + amt);
       for (const code of new Set([...b.byTax.keys(), ...h.byTax.keys()])) {

@@ -14,7 +14,15 @@ export async function loadReplayInvoices(): Promise<ReplayInvoice[]> {
     number: r.number, kind: r.kind, partner: r.partner, date: r.date.toISOString().slice(0, 10), state: r.state, currency: r.currency,
     lines: r.lines.map((l) => ({ lineNo: l.lineNo, quantity: l.quantity, priceUnitMinor: l.priceUnitMinor, taxCodes: l.taxCodes })),
     storedTaxMinor: r.taxMinor,
+    configCommit: r.configCommit,
   }));
+}
+
+/** The trees every invoice was computed with, for the parity check. */
+export async function treesForInvoices(invoices: ReplayInvoice[]): Promise<Record<string, ConfigTree>> {
+  const out: Record<string, ConfigTree> = {};
+  for (const h of new Set(invoices.map((i) => i.configCommit).filter((h): h is string => Boolean(h)))) out[h] = await treeAt(h);
+  return out;
 }
 
 export async function referencedTaxCodes(openOnly = false): Promise<Set<string>> {
@@ -93,7 +101,7 @@ export async function runChecks(number: string, actor: Principal): Promise<{ che
   const problems = validateTree(merged.clean ? merged.tree : headTree, await referencedTaxCodes(true));
   results.push({ name: "config-loads", conclusion: problems.length ? "failure" : "success", summary: problems.length ? `${problems.length} problem(s): ${problems[0]}` : `Configuration loads: ${Object.keys(headTree.taxes).length} taxes valid, every referenced tax present and active`, detail: { problems } });
   const invoices = await loadReplayInvoices();
-  const impact = replay(baseTree, headTree, invoices);
+  const impact = replay(baseTree, headTree, invoices, await treesForInvoices(invoices));
   const removed = [...await referencedTaxCodes(true)].filter((c) => !headTree.taxes[c] || !headTree.taxes[c].active);
   const impactFailed = removed.length > 0;
   results.push({ name: "impact", conclusion: impactFailed ? "failure" : "success", summary: impactFailed ? `${impact.headline} Fails: tax ${removed.join(", ")} is still referenced by open invoices.` : impact.headline, detail: impact as unknown as object });
