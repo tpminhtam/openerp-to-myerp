@@ -3,6 +3,8 @@ import { handle } from "@/lib/http";
 import { proposeFromText } from "@/lib/agent";
 
 /** Body: { text }. Claude turns plain English into a validated change request opened as the `claude` principal. */
+export const maxDuration = 60;
+
 export async function POST(req: NextRequest) {
   return handle(async () => {
     const body = await req.json();

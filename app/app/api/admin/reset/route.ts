@@ -4,6 +4,8 @@ import { prisma } from "@/lib/db";
 import { seed } from "@/lib/seed";
 
 /** Restore the untouched demo state. Guarded by RESET_TOKEN when set (always allowed in development). */
+export const maxDuration = 60;
+
 export async function POST(req: NextRequest) {
   return handle(async () => {
     const token = process.env.RESET_TOKEN;

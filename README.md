@@ -2,6 +2,8 @@
 
 **SF Enterprise Hackathon 2.0 · 23 September 2026 · Legacy Modernization on Opsera Forge.** Solo build by Tam Tran.
 
+**Live:** https://myerp-ai.vercel.app (Vercel + Neon Postgres; the agent actions call Claude live).
+
 ## The legacy system
 
 The accounting module of **OpenERP 7.0**, the 2013 release of what is now Odoo: Python 2.7, an in-house ORM, XML-RPC, server-rendered XML views. It lives unmodified under [`legacy/openerp-7.0/`](legacy/openerp-7.0/) (AGPL-3, OpenERP S.A.). Its tax model, `account_tax` in [`account.py`](legacy/openerp-7.0/addons/account/account.py), stores a rate as a float that is edited in place on a form: no effective dates, no history, no diff, no review of the change, and no way to ask what a change would have done to the invoices already issued. A tax could even be defined as Python code evaluated at runtime.

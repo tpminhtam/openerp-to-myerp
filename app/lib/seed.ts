@@ -4,8 +4,7 @@
  * journal entry per validated invoice. Then the initial configuration commit with `main` pointing at it.
  */
 import { PrismaClient } from "@prisma/client";
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
+import legacyChart from "../data/legacy_chart.json";
 import { computeAll, type TaxDef } from "./tax";
 import { canonicalJson, hashObject } from "./canonical";
 import { PRINCIPALS } from "./sod";
@@ -48,7 +47,7 @@ function rng(seed: number) {
 function treeHashOf(tree: ConfigTree) { return hashObject("tree", canonicalJson(tree)); }
 
 export async function seed(prisma: PrismaClient): Promise<string> {
-  const chart = JSON.parse(readFileSync(join(process.cwd(), "data", "legacy_chart.json"), "utf8")) as { accounts: { xml_id: string; code: string; name: string; type: string; user_type: string; parent: string; reconcile: string }[]; journals: { code: string; name: string; type: string }[] };
+  const chart = legacyChart as unknown as { accounts: { xml_id: string; code: string; name: string; type: string; user_type: string; parent: string; reconcile: string }[]; journals: { code: string; name: string; type: string }[] };
   await prisma.$transaction([
     prisma.auditLog.deleteMany(), prisma.review.deleteMany(), prisma.check.deleteMany(), prisma.changeRequest.deleteMany(),
     prisma.refLog.deleteMany(), prisma.ref.deleteMany(), prisma.configCommit.deleteMany(),
